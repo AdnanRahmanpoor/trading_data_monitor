@@ -82,4 +82,35 @@ class DataIngestion:
         data['Price_Range'] = data['High'] - data['Low']
         data['Returns'] = data['Close'].pct_change()
         return data
-                
+    
+    def validate_data_completeness(self, data: pd.DataFrame, symbol: str) -> Dict[str, float]:
+        completeness_metrics = {}
+
+        total_records = len(data)
+
+        # Check missing values for each column
+        for col in ['Open', 'High', 'Low', 'Close', 'Volume']:
+            if col in data.columns:
+                missing_count = data[col].isnull().sum()
+                missing_pct = (missing_count / total_records) * 100
+
+                completeness_metrics[f'{col}_missing_pct'] = missing_pct
+
+                if missing_pct > self.config.QUALITY_THRESHOLD['max_missing_pct']:
+                    print(f'{symbol}: {col} has {missing_pct:.2f} % missing values ')
+                    print(f'threshold: {self.config.QUALITY_THRESHOLD["max_missing_pct"]}%')
+
+        # Check for gaps in time
+        if len(data) > 1:
+            time_diff = data.index.to_series().diff()
+            expected_interval = pd.Timedelta(minutes=60) # change based on data interval in config.py
+            gaps = time_diff > expected_interval * 2 # tolerance
+            gap_count = gaps.sum()
+            gap_pct = (gap_count / len(data)) * 100
+
+            completeness_metrics['timestamp_gaps_pct'] = gap_pct
+
+            if gap_count > 0:
+                print(f'{symbol}: Found {gap_count} timestamp gaps')
+
+        return completeness_metrics

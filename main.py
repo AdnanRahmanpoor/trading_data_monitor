@@ -18,6 +18,8 @@ def main():
         cleaned = data_cleaning.clean_price_data(data, symbol)
         cleaned_data[symbol] = cleaned
 
+        data_ingestion.validate_data_completeness(data, symbol)
+
         # cleaning summary
         stats = data_cleaning.cleaning_stats[symbol]
         print(f"> Cleaned {symbol}: {len(stats['actions'])} actions")
