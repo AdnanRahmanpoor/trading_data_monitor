@@ -19,6 +19,7 @@ def main():
         cleaned_data[symbol] = cleaned
 
         data_ingestion.validate_data_completeness(data, symbol)
+        data_ingestion.validate_price_consistency(data, symbol)
 
         # cleaning summary
         stats = data_cleaning.cleaning_stats[symbol]

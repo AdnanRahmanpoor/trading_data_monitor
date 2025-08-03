@@ -96,9 +96,9 @@ class DataIngestion:
 
                 completeness_metrics[f'{col}_missing_pct'] = missing_pct
 
-                if missing_pct > self.config.QUALITY_THRESHOLD['max_missing_pct']:
+                if missing_pct > self.config.QUALITY_THRESHOLDS['max_missing_pct']:
                     print(f'{symbol}: {col} has {missing_pct:.2f} % missing values ')
-                    print(f'threshold: {self.config.QUALITY_THRESHOLD["max_missing_pct"]}%')
+                    print(f'threshold: {self.config.QUALITY_THRESHOLDS["max_missing_pct"]}%')
 
         # Check for gaps in time
         if len(data) > 1:
@@ -114,3 +114,37 @@ class DataIngestion:
                 print(f'{symbol}: Found {gap_count} timestamp gaps')
 
         return completeness_metrics
+    
+    def validate_price_consistency(self, data: pd.DataFrame, symbol: str) -> Dict[str, float]:
+        consistency_metrics = {}
+
+        invalid_ohlc = 0
+        total_records = len(data)
+
+        high_invalid = (data['High'] < np.maximum(data['Open'], data['Close'])).sum()
+
+        low_invalid = (data['Low'] > np.maximum(data['Open'], data['Close'])).sum()
+ 
+        invalid_ohlc = high_invalid + low_invalid
+        consistency_metrics['invalid_ohlc_pct'] = (invalid_ohlc / total_records) * 100
+
+        if invalid_ohlc > 0:
+            print(f"{symbol}: Found {invalid_ohlc} invalid OHLC relationships")
+
+        if 'Returns' in data.columns:
+            extreme_moves = np.abs(data['Returns']) > (self.config.QUALITY_THRESHOLDS['max_price_changes_pct'] / 100)
+            extreme_count = extreme_moves.sum()
+            consistency_metrics['extreme_moves_pct'] = (extreme_count / total_records) * 100
+
+            if extreme_count > 0:
+                print(f"{symbol}: Found {extreme_count} extreme price movements")
+
+        # volume
+        if 'Volume' in data.columns:
+            zero_volume = (data['Volume'] == 0).sum()
+            low_volume = (data['Volume'] < self.config.QUALITY_THRESHOLDS['min_volume']).sum()
+
+            consistency_metrics['zero_volume_pct'] = (zero_volume / total_records) * 100
+            consistency_metrics['low_volume_pct'] = (low_volume / total_records) * 100
+        
+        return consistency_metrics
