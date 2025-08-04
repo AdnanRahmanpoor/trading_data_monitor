@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from scipy import stats
 
 from config import Config
 
@@ -22,6 +23,15 @@ class DataCleaning:
 
         return outliers
     
+    # zscore
+    def detect_outliers_zscore(self, data: pd.Series, threshold: float = 3.0) -> pd.Series:
+        z_scores = np.abs(stats.zscore(data.dropna()))
+
+        outliers = pd.Series(False, index=data.index)
+        outliers.loc[data.dropna().index] = z_scores > threshold
+
+        return outliers
+    
     def clean_price_data(self, data: pd.DataFrame, symbol: str) -> pd.DataFrame:
         cleaned_data = data.copy()
         cleaning_actions = []
@@ -40,14 +50,27 @@ class DataCleaning:
                     missing_after = cleaned_data[col].isnull().sum()
                     cleaning_actions.append(f"Filled {missing_before - missing_after} missing values in {col} ")
 
+        # volume data
+        if 'Volume' in cleaned_data.columns:
+            volume_missing = cleaned_data['Volume'].isnull().sum()
+
+            if volume_missing > 0:
+                median_volume = cleaned_data['Volume'].median()
+                cleaned_data['Volume'] = cleaned_data['Volume'].fillna(median_volume)
+                cleaning_actions.append(f"Filled {volume_missing} missing volume values with media")
+
         # Outliers
         for col in price_cols:
             if col in cleaned_data.columns and len(cleaned_data[col].dropna() > 10):
-                outliers = self.detect_outliers_iqr(cleaned_data[col])
-                
+                iqr_outliers = self.detect_outliers_iqr(cleaned_data[col])
+                zscore_outliers = self.detect_outliers_zscore(cleaned_data[col])
+
+                outliers = iqr_outliers & zscore_outliers                
                 outliers_count = outliers.sum()
 
                 if outliers_count > 0:
+                    print(f"{symbol}: Found {outliers_count} outliers in {col}")
+
                     cleaned_data.loc[outliers, col] = np.nan
                     cleaned_data[col] = cleaned_data[col].interpolate(method='linear')
 
