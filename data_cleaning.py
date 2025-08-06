@@ -1,3 +1,4 @@
+from datetime import datetime, time
 import numpy as np
 import pandas as pd
 from scipy import stats
@@ -37,7 +38,8 @@ class DataCleaning:
         cleaning_actions = []
 
         price_cols = ['Open', 'High', 'Low', 'Close']
-
+        
+        # ohlc missing values
         for col in price_cols:
             if col in cleaned_data.columns:
                 missing_before = cleaned_data[col].isnull().sum()
@@ -75,13 +77,48 @@ class DataCleaning:
                     cleaned_data[col] = cleaned_data[col].interpolate(method='linear')
 
                     cleaning_actions.append(f"Replaced {outliers_count} outliers in {col}")
+        
+        # fix ohlc
+        ohlc_fixes = 0
+        for i in range(len(cleaned_data)):
+            row = cleaned_data.iloc[i]
+
+            # Ensure High >= max(open, close) AND Low <= min(open,close)
+            if pd.notna(row[['Open', 'High', 'Low', 'Close']]).all():
+                max_oc = max(row['Open'], row['Close'])
+                min_oc = min(row['Open'], row['Close'])
+
+                if row['High'] < max_oc:
+                    cleaned_data.at[i, 'High'] = max_oc
+                    ohlc_fixes += 1
+
+                if row['Low'] < max_oc:
+                    cleaned_data.at[i, 'Low'] = min_oc
+                    ohlc_fixes += 1
+        
+        if ohlc_fixes > 0:
+            cleaning_actions.append(f"Fixed {ohlc_fixes} OHLC relationship violations")
                 
-                
+
+        # removing off-market hours data
+        cleaned_data.index = pd.to_datetime(cleaned_data.index)
+        if isinstance(cleaned_data.index, pd.DatetimeIndex):
+            market_open = time(9, 30)
+            market_close = time(16, 0)
+
+            market_hours = (cleaned_data.index.time >= market_open) & (cleaned_data.index.time <= market_close)
+            records_removed = len(cleaned_data) - market_hours.sum()
+
+            if records_removed > 0:
+                cleaned_data = cleaned_data[market_hours]
+                cleaning_actions.append(f"Removed {records_removed} records outside market hours")
+
         # stats
         self.cleaning_stats[symbol] = {
             'actions': cleaning_actions,
             'original_rows': len(data),
-            'cleaned_rows': len(cleaned_data)
+            'cleaned_rows': len(cleaned_data),
+            'cleaning_time': datetime.now()
         }
 
         return cleaned_data
