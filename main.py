@@ -1,6 +1,7 @@
 from config import Config
 from data_cleaning import DataCleaning
 from data_ingestion import DataIngestion
+from monitoring_system import AlertManager, DataQualityMonitor
 
 
 def main():
@@ -12,6 +13,8 @@ def main():
     raw_data = data_ingestion.fetch_market_data(symbols)
     
     data_cleaning = DataCleaning(config)
+    alert_manager = AlertManager()
+    quality_monitor = DataQualityMonitor(config, alert_manager)
     cleaned_data = {}
 
     for symbol, data in raw_data.items():
@@ -20,7 +23,7 @@ def main():
 
         data_ingestion.validate_data_completeness(data, symbol)
         data_ingestion.validate_price_consistency(data, symbol)
-
+        
         # cleaning summary
         stats = data_cleaning.cleaning_stats[symbol]
         print(f"> Cleaned {symbol}: {len(stats['actions'])} actions")
